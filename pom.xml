@@ -79,6 +79,7 @@
         <module>testlib</module>
         <module>benchmark</module>
         <module>examples</module>
+		<module>services-api</module>
         <module>services</module>
         <module>utils</module>
         <module>ipc</module>
