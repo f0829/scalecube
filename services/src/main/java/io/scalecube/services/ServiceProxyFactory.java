@@ -25,6 +25,11 @@ public class ServiceProxyFactory {
 
   private Microservices microservices;
 
+  /**
+   * Contractor for service proxy factory.
+   * 
+   * @param microservices instance on which this factory is binded to.
+   */
   public ServiceProxyFactory(Microservices microservices) {
     this.microservices = microservices;
     this.serviceRegistry = microservices.serviceRegistry();
