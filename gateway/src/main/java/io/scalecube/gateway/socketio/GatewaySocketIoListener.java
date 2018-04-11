@@ -27,10 +27,10 @@ public final class GatewaySocketIoListener implements SocketIOListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(GatewaySocketIoListener.class);
 
   /**
-   * A mapping between socketio {@link Session} identifier and our own generated {@link ChannelContext} identifier. Map
-   * is updated when corresponding {@link Session} disconnects.
+   * A mapping between socketio {@link Session} identifier and {@link ChannelContext} object. Map is updated when
+   * corresponding {@link Session} disconnects.
    */
-  private final ConcurrentMap<String, String> sessionIdToChannelContextId = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, ChannelContext> channelContexts = new ConcurrentHashMap<>();
 
   private final EventStream eventStream;
 
@@ -47,7 +47,7 @@ public final class GatewaySocketIoListener implements SocketIOListener {
     ChannelContext channelContext = ChannelContext.create(Address.create(host, port));
 
     // save mapping
-    sessionIdToChannelContextId.put(session.getSessionId(), channelContext.getId());
+    channelContexts.put(session.getSessionId(), channelContext);
 
     // register cleanup process upfront
     channelContext.listenClose(input -> {
@@ -78,18 +78,10 @@ public final class GatewaySocketIoListener implements SocketIOListener {
 
   @Override
   public void onMessage(Session session, ByteBuf buf) {
-    String channelContextId = sessionIdToChannelContextId.get(session.getSessionId());
-    if (channelContextId == null) {
+    ChannelContext channelContext = channelContexts.get(session.getSessionId());
+    if (channelContext == null) {
       LOGGER.error("Can't find channel context id by session id: {}", session.getSessionId());
       ChannelSupport.releaseRefCount(buf);
-      session.disconnect();
-      return;
-    }
-
-    ChannelContext channelContext = ChannelContext.getIfExist(channelContextId);
-    if (channelContext == null) {
-      ChannelSupport.releaseRefCount(buf);
-      LOGGER.error("Failed to handle message, channel context is null by id: {}", channelContextId);
       session.disconnect();
       return;
     }
@@ -110,11 +102,11 @@ public final class GatewaySocketIoListener implements SocketIOListener {
 
   @Override
   public void onDisconnect(Session session) {
-    String channelContextId = sessionIdToChannelContextId.remove(session.getSessionId());
-    if (channelContextId == null) {
+    ChannelContext channelContext = channelContexts.remove(session.getSessionId());
+    if (channelContext == null) {
       LOGGER.error("Can't find channel context id by session id: {}", session.getSessionId());
       return;
     }
-    ChannelContext.closeIfExist(channelContextId);
+    channelContext.close();
   }
 }
