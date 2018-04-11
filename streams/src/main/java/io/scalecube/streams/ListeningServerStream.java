@@ -1,5 +1,6 @@
 package io.scalecube.streams;
 
+import io.reactivex.Flowable;
 import io.scalecube.streams.netty.NettyServerTransport;
 import io.scalecube.transport.Address;
 
@@ -9,8 +10,6 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-
-import rx.Observable;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -87,7 +86,7 @@ public final class ListeningServerStream implements EventStream {
   }
 
   @Override
-  public Observable<Event> listen() {
+  public Flowable<Event> listen() {
     return serverStream.listen();
   }
 

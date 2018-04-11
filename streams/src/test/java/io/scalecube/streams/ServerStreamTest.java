@@ -3,6 +3,7 @@ package io.scalecube.streams;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import io.reactivex.processors.PublishProcessor;
 import io.scalecube.transport.Address;
 
 import org.junit.Before;
@@ -65,11 +66,11 @@ public class ServerStreamTest {
 
   @Test
   public void testServerStreamSendMessageWithNoIdentity() throws Exception {
-    PublishSubject<Object> subject = PublishSubject.create();
+    PublishProcessor<Object> subject = PublishProcessor.create();
     channelContext.listen().subscribe(subject);
     serverStream.send(StreamMessage.builder().qualifier("q").build());
-    subject.onCompleted();
-    assertTrue(subject.isEmpty().toBlocking().toFuture().get());
+    subject.onComplete();
+    assertTrue(subject.isEmpty().blockingGet());
   }
 
   @Test

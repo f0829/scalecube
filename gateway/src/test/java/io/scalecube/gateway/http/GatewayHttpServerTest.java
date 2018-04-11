@@ -11,6 +11,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import io.reactivex.disposables.Disposable;
 import io.scalecube.streams.ErrorData;
 import io.scalecube.streams.Event;
 import io.scalecube.streams.Qualifier;
@@ -32,8 +33,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import rx.Subscription;
-
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
@@ -51,7 +50,7 @@ public class GatewayHttpServerTest {
   private static AsyncHttpClient httpClient;
   private static ObjectMapper mapper = new ObjectMapper();
 
-  private Subscription subscription;
+  private Disposable subscription;
 
   @BeforeClass
   public static void init() {
@@ -77,7 +76,7 @@ public class GatewayHttpServerTest {
   @After
   public void tearDown() {
     if (subscription != null) {
-      subscription.unsubscribe();
+      subscription.dispose();
     }
   }
 

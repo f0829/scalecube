@@ -4,13 +4,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import io.reactivex.observers.BaseTestConsumer;
+import io.reactivex.subscribers.TestSubscriber;
 import io.scalecube.streams.Event.Topic;
 import io.scalecube.transport.Address;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import rx.observers.AssertableSubscriber;
+import rx.observers.TestObserver;
 
 import java.time.Duration;
 import java.util.List;
@@ -105,7 +107,7 @@ public class ListeningServerStreamTest {
 
   @Test
   public void testServerStreamRemotePartyClosed() throws Exception {
-    AssertableSubscriber<Event> serverStreamSubscriber = serverStream.listen().test();
+    TestSubscriber<Event> test = serverStream.listen().test();
 
     Address address = serverStream.bindAwait();
 
@@ -113,13 +115,12 @@ public class ListeningServerStreamTest {
     clientStream.send(address, StreamMessage.builder().qualifier("q/test").build());
 
     List<Event> events =
-        serverStreamSubscriber.awaitValueCount(2, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).getOnNextEvents();
+            test.awaitCount(2, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS).values();
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
     assertEquals(Topic.ReadSuccess, events.get(1).getTopic());
 
     // close remote party and receive corresp events
-    AssertableSubscriber<Event> channelInactiveSubscriber =
-        serverStream.listenChannelContextClosed().test();
+    TestSubscriber<Event> chInactiveSubscriber = serverStream.listenChannelContextClosed().test();
 
     // close connector channel at client stream
     clientStream.close();
@@ -128,7 +129,7 @@ public class ListeningServerStreamTest {
     TimeUnit.SECONDS.sleep(3);
 
     // assert that serverStream received event about closed client connector channel
-    Event event = channelInactiveSubscriber.getOnNextEvents().get(0);
+    Event event = chInactiveSubscriber.values().get(0);
     assertEquals(Topic.ChannelContextClosed, event.getTopic());
     assertFalse("Must not have error at this point", event.hasError());
   }

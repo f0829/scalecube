@@ -3,12 +3,11 @@ package io.scalecube.streams;
 import io.scalecube.cluster.membership.IdGenerator;
 import io.scalecube.transport.Address;
 
+import io.reactivex.Flowable;
+import io.reactivex.processors.PublishProcessor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import rx.Observable;
-import rx.subjects.PublishSubject;
-import rx.subjects.Subject;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -23,8 +22,8 @@ public final class ChannelContext {
 
   private static final ConcurrentMap<String, ChannelContext> idToChannelContext = new ConcurrentHashMap<>();
 
-  private final Subject<Event, Event> subject = PublishSubject.<Event>create().toSerialized();
-  private final Subject<Event, Event> closeSubject = PublishSubject.<Event>create().toSerialized();
+  private final PublishProcessor<Event> subject = PublishProcessor.create();
+  private final PublishProcessor<Event> closeSubject = PublishProcessor.create();
 
   private final String id;
   private final Address address;
@@ -93,11 +92,11 @@ public final class ChannelContext {
     subject.onNext(event);
   }
 
-  public Observable<Event> listen() {
-    return subject.onBackpressureBuffer().asObservable();
+  public Flowable<Event> listen() {
+    return subject;
   }
 
-  public Observable<Event> listenWrite() {
+  public Flowable<Event> listenWrite() {
     return listen().filter(Event::isWrite);
   }
 
@@ -126,8 +125,8 @@ public final class ChannelContext {
    * Subsequent {@link #getIfExist(String)} would return null after this operation.
    */
   public void close() {
-    subject.onCompleted();
-    closeSubject.onCompleted();
+    subject.onComplete();
+    closeSubject.onComplete();
     ChannelContext channelContext = idToChannelContext.remove(id);
     if (channelContext != null) {
       LOGGER.debug("Closed and removed {}", channelContext);

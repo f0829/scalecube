@@ -1,5 +1,6 @@
 package io.scalecube.streams;
 
+import io.reactivex.disposables.CompositeDisposable;
 import io.scalecube.transport.Address;
 
 import rx.Observable;
@@ -15,7 +16,7 @@ public final class ServerStreamProcessorFactory {
   private final Subject<StreamProcessor, StreamProcessor> streamProcessorSubject =
       PublishSubject.<StreamProcessor>create().toSerialized();
 
-  private final CompositeSubscription subscriptions = new CompositeSubscription();
+  private final CompositeDisposable subscriptions = new CompositeDisposable();
 
   /**
    * Constructor for this factory. Right away defines logic for bidirectional communication with respect to server side

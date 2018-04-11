@@ -1,8 +1,7 @@
 package io.scalecube.streams;
 
+import io.reactivex.Flowable;
 import io.scalecube.transport.Address;
-
-import rx.Observable;
 
 import java.util.function.Consumer;
 
@@ -10,7 +9,7 @@ public interface EventStream {
 
   void subscribe(ChannelContext channelContext);
 
-  Observable<Event> listen();
+  io.reactivex.Flowable<Event> listen();
 
   void onNext(Event event);
 
@@ -20,35 +19,35 @@ public interface EventStream {
 
   void listenClose(Consumer<Void> onClose);
 
-  default Observable<Event> listenReadSuccess() {
+  default Flowable<Event> listenReadSuccess() {
     return listen().filter(Event::isReadSuccess);
   }
 
-  default Observable<Event> listenReadError() {
+  default Flowable<Event> listenReadError() {
     return listen().filter(Event::isReadError);
   }
 
-  default Observable<Event> listenWrite() {
+  default Flowable<Event> listenWrite() {
     return listen().filter(Event::isWrite);
   }
 
-  default Observable<Event> listenWriteSuccess() {
+  default Flowable<Event> listenWriteSuccess() {
     return listen().filter(Event::isWriteSuccess);
   }
 
-  default Observable<Event> listenWriteError() {
+  default Flowable<Event> listenWriteError() {
     return listen().filter(Event::isWriteError);
   }
 
-  default Observable<Event> listenChannelContextClosed() {
+  default Flowable<Event> listenChannelContextClosed() {
     return listen().filter(Event::isChannelContextClosed);
   }
 
-  default Observable<Event> listenChannelContextSubscribed() {
+  default Flowable<Event> listenChannelContextSubscribed() {
     return listen().filter(Event::isChannelContextSubscribed);
   }
 
-  default Observable<Event> listenChannelContextUnsubscribed() {
+  default Flowable<Event> listenChannelContextUnsubscribed() {
     return listen().filter(Event::isChannelContextUnsubscribed);
   }
 }

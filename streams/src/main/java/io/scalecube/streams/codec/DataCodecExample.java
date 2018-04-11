@@ -42,7 +42,7 @@ public class DataCodecExample {
         sp.onError(e);
         return;
       }
-      sp.onCompleted();
+      sp.onComplete();
     }, t -> t.printStackTrace()));
 
     Address address = serverStreamProcessors.bindAwait();

@@ -8,6 +8,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
+import io.reactivex.observers.BaseTestConsumer;
+import io.reactivex.subscribers.TestSubscriber;
 import io.scalecube.streams.Event.Topic;
 import io.scalecube.transport.Address;
 
@@ -19,8 +21,6 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import rx.observers.AssertableSubscriber;
 
 import java.net.ConnectException;
 import java.net.UnknownHostException;
@@ -82,7 +82,7 @@ public class ClientStreamTest {
 
   @Test
   public void testClientStreamProducesWriteEvents() throws Exception {
-    AssertableSubscriber<Event> clientSubscriber = clientStream.listen().test();
+    TestSubscriber<Event> clientSubscriber = clientStream.listen().test();
 
     int n = (int) 1e4;
     IntStream.rangeClosed(1, n)
@@ -90,9 +90,9 @@ public class ClientStreamTest {
 
     int expected = n * 2 + 1;
     List<Event> events = clientSubscriber
-        .awaitValueCount(expected, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents();
+        .awaitCount(expected, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values();
 
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
     for (int w = 1, ws = 2, q = 1; q <= expected && w <= expected - 2 && ws <= expected - 2; w += 2, ws += 2, q++) {
@@ -103,7 +103,7 @@ public class ClientStreamTest {
 
   @Test
   public void testClientStreamSendsToServerStream() throws Exception {
-    AssertableSubscriber<Event> serverSubscriber = serverStream.listen().test();
+    TestSubscriber<Event> serverSubscriber = serverStream.listen().test();
 
     int n = (int) 1e4;
     IntStream.rangeClosed(1, n)
@@ -111,9 +111,9 @@ public class ClientStreamTest {
 
     int expected = n + 1;
     List<Event> events = serverSubscriber
-        .awaitValueCount(expected, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents();
+        .awaitCount(expected, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values();
 
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
     for (int i = 1; i < expected; i++) {
@@ -127,7 +127,7 @@ public class ClientStreamTest {
         .map(Event::getMessageOrThrow)
         .subscribe(serverStream::send);
 
-    AssertableSubscriber<Event> clientSubscriber =
+    TestSubscriber<Event> clientSubscriber =
         clientStream.listen().filter(Event::isReadSuccess).test();
 
     int n = (int) 1e4;
@@ -135,9 +135,9 @@ public class ClientStreamTest {
         .forEach(i -> clientStream.send(address, StreamMessage.builder().qualifier("q/" + i).build()));
 
     List<Event> events = clientSubscriber
-        .awaitValueCount(n, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents();
+        .awaitCount(n, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values();
 
     for (int i = 1; i <= n; i++) {
       assertReadSuccess("q/" + i, events.get(i - 1));
@@ -157,15 +157,15 @@ public class ClientStreamTest {
     Address failedAddress = Address.from("host:0"); // invalid both host and port
     StreamMessage message = StreamMessage.builder().qualifier("q/helloFail").build();
 
-    AssertableSubscriber<Event> clientSubscriber =
+    TestSubscriber<Event> clientSubscriber =
         clientStreamCustom.listen().filter(Event::isWriteError).test();
 
     clientStreamCustom.send(failedAddress, message);
 
     Event event = clientSubscriber
-        .awaitValueCount(1, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents()
+        .awaitCount(1, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values()
         .get(0);
 
     assertEquals(Topic.WriteError, event.getTopic());
@@ -180,15 +180,15 @@ public class ClientStreamTest {
     Address failedAddress = Address.from("localhost:0"); // host is valid port is not
     StreamMessage message = StreamMessage.builder().qualifier("q/helloFail").build();
 
-    AssertableSubscriber<Event> clientSubscriber =
+    TestSubscriber<Event> clientSubscriber =
         clientStreamCustom.listen().filter(Event::isWriteError).test();
 
     clientStreamCustom.send(failedAddress, message);
 
     Event event = clientSubscriber
-        .awaitValueCount(1, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents()
+        .awaitCount(1, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values()
         .get(0);
 
     assertEquals(Topic.WriteError, event.getTopic());
@@ -200,20 +200,20 @@ public class ClientStreamTest {
 
   @Test
   public void testClientStreamRemotePartyClosed() throws Exception {
-    AssertableSubscriber<Event> serverSubscriber = serverStream.listen().test();
+    TestSubscriber<Event> serverSubscriber = serverStream.listen().test();
 
     clientStream.send(address, StreamMessage.builder().qualifier("q/hello").build());
 
     List<Event> events = serverSubscriber
-        .awaitValueCount(2, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNoTerminalEvent()
-        .getOnNextEvents();
+        .awaitCount(1, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+        .assertNotTerminated()
+        .values();
 
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
     assertEquals(Topic.ReadSuccess, events.get(1).getTopic());
 
     // close remote party and receive corresp events
-    AssertableSubscriber<Event> clientChannelContextInactiveSubscriber =
+    TestSubscriber<Event> clientChannelContextInactiveSubscriber =
         clientStream.listenChannelContextClosed().test();
 
     // unbind server channel at serverStream
@@ -223,7 +223,7 @@ public class ClientStreamTest {
     TimeUnit.MILLISECONDS.sleep(TIMEOUT_MILLIS);
 
     // assert that clientStream received event about closed channel corresp to serverStream channel
-    Event event = clientChannelContextInactiveSubscriber.getOnNextEvents().get(0);
+    Event event = clientChannelContextInactiveSubscriber.values().get(0);
     assertEquals(Topic.ChannelContextClosed, event.getTopic());
     assertFalse("Must not have error at this point", event.hasError());
   }
@@ -236,16 +236,16 @@ public class ClientStreamTest {
 
     try {
       // send two msgs on two addresses => activate two connections => emit events
-      AssertableSubscriber<Event> clientSubscriber =
+      TestSubscriber<Event> clientSubscriber =
           clientStream.listenChannelContextSubscribed().test();
 
       // send msgs
       clientStream.send(address, StreamMessage.builder().qualifier("q/msg").build());
       clientStream.send(anotherAddress, StreamMessage.builder().qualifier("q/anotherMsg").build());
 
-      List<Event> events = clientSubscriber.awaitValueCount(2, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-          .assertNoTerminalEvent()
-          .getOnNextEvents();
+      List<Event> events = clientSubscriber.awaitCount(1, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+          .assertNotTerminated()
+          .values();
 
       Event firstEvent = events.get(0);
       Event secondEvent = events.get(1);
@@ -255,15 +255,15 @@ public class ClientStreamTest {
       assertThat(secondEvent.getAddress(), anyOf(is(address), is(anotherAddress)));
 
       // listen close
-      AssertableSubscriber<Event> closeSubscriber =
+      TestSubscriber<Event> closeSubscriber =
           clientStream.listenChannelContextUnsubscribed().test();
 
       // close and ensure all connections closed
       clientStream.close();
 
       List<Event> closeEvents = new ArrayList<>(closeSubscriber
-          .awaitValueCount(2, TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-          .getOnNextEvents());
+          .awaitCount(1, BaseTestConsumer.TestWaitStrategy.SLEEP_100MS)
+          .values());
 
       Event firstCloseEvent = closeEvents.get(0);
       Event secondCloseEvent = closeEvents.get(1);

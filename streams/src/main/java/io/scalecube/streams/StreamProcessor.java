@@ -1,11 +1,13 @@
 package io.scalecube.streams;
 
-import rx.Observable;
+import io.reactivex.Flowable;
+import org.reactivestreams.Subscriber;
 import rx.Observer;
 
-public interface StreamProcessor extends Observer<StreamMessage> {
+public interface StreamProcessor extends Subscriber<StreamMessage> {
 
-  Observable<StreamMessage> listen();
+  Flowable<StreamMessage> listen();
 
   void close();
+
 }

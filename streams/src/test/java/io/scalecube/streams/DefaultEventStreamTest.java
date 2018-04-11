@@ -7,10 +7,10 @@ import static org.junit.Assert.assertTrue;
 import io.scalecube.streams.Event.Topic;
 import io.scalecube.transport.Address;
 
-import org.junit.Test;
+import io.reactivex.processors.BehaviorProcessor;
+import io.reactivex.subscribers.TestSubscriber;
 
-import rx.observers.AssertableSubscriber;
-import rx.subjects.BehaviorSubject;
+import org.junit.Test;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,8 +28,8 @@ public class DefaultEventStreamTest {
 
   @Test
   public void testChannelContextPostsEvents() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
-    AssertableSubscriber<Event> subscriber = subject.test();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
+    TestSubscriber<Event> test = subject.test();
     eventStream.listen().subscribe(subject);
 
     eventStream.subscribe(ctx);
@@ -40,39 +40,39 @@ public class DefaultEventStreamTest {
     anotherCtx.postReadSuccess(messageTwo);
     anotherCtx.postReadSuccess(messageTwo);
 
-    subscriber.assertValueCount(6);
+    test.assertValueCount(6);
   }
 
   @Test
   public void testChannelContextsAreIsolated() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listen().subscribe(subject);
     eventStream.subscribe(ctx);
     eventStream.subscribe(anotherCtx);
 
     ctx.postReadSuccess(messageOne);
-    assertEquals(messageOne, subject.test().getOnNextEvents().get(0).getMessageOrThrow());
+    assertEquals(messageOne, subject.test().values().get(0).getMessageOrThrow());
 
     // at this point close anotherCtx
     anotherCtx.close();
 
     // keep posting via ctx
     ctx.postReadSuccess(messageTwo);
-    assertEquals(messageTwo, subject.test().getOnNextEvents().get(0).getMessageOrThrow());
+    assertEquals(messageTwo, subject.test().values().get(0).getMessageOrThrow());
   }
 
   @Test
   public void testChannelContextUnsubscribingIsIsolated() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listen().subscribe(subject);
     eventStream.subscribe(ctx);
     eventStream.subscribe(anotherCtx);
 
     ctx.postReadSuccess(messageOne);
-    assertEquals(messageOne, subject.test().getOnNextEvents().get(0).getMessageOrThrow());
+    assertEquals(messageOne, subject.test().values().get(0).getMessageOrThrow());
 
     anotherCtx.postReadSuccess(messageTwo);
-    assertEquals(messageTwo, subject.test().getOnNextEvents().get(0).getMessageOrThrow());
+    assertEquals(messageTwo, subject.test().values().get(0).getMessageOrThrow());
 
     ctx.close();
     anotherCtx.close();
@@ -81,7 +81,7 @@ public class DefaultEventStreamTest {
     ChannelContext anotherCtx = ChannelContext.create(Address.from("localhost:2"));
     eventStream.subscribe(anotherCtx);
     anotherCtx.postReadError(new RuntimeException("Can't decode incoming msg"));
-    assertEquals(Topic.ReadError, subject.test().getOnNextEvents().get(0).getTopic());
+    assertEquals(Topic.ReadError, subject.test().values().get(0).getTopic());
   }
 
   @Test
@@ -123,31 +123,31 @@ public class DefaultEventStreamTest {
     eventStream.subscribe(ctx);
     eventStream.subscribe(anotherCtx);
 
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listenChannelContextClosed().subscribe(subject);
 
     ctx.close();
 
-    List<Event> list = subject.test().assertValueCount(1).getOnNextEvents();
+    List<Event> list = subject.test().assertValueCount(1).values();
     assertEquals(Topic.ChannelContextClosed, list.get(0).getTopic());
     assertEquals(ctx.getId(), list.get(0).getIdentity());
 
     anotherCtx.close();
 
-    List<Event> list2 = subject.test().assertValueCount(1).getOnNextEvents();
+    List<Event> list2 = subject.test().assertValueCount(1).values();
     assertEquals(Topic.ChannelContextClosed, list2.get(0).getTopic());
     assertEquals(anotherCtx.getId(), list2.get(0).getIdentity());
   }
 
   @Test
   public void testEventStreamSubscribe() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listenChannelContextSubscribed().subscribe(subject);
 
     // subscribe and check events later
     eventStream.subscribe(ctx);
 
-    List<Event> list = subject.test().assertValueCount(1).getOnNextEvents();
+    List<Event> list = subject.test().assertValueCount(1).values();
     assertEquals(Topic.ChannelContextSubscribed, list.get(0).getTopic());
     assertEquals(ctx.getId(), list.get(0).getIdentity());
   }
@@ -186,12 +186,12 @@ public class DefaultEventStreamTest {
     eventStream.subscribe(ctx);
     eventStream.subscribe(anotherCtx);
 
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listenChannelContextUnsubscribed().subscribe(subject);
-    AssertableSubscriber<Event> subscriber = subject.test();
+    TestSubscriber<Event> subscriber = subject.test();
     eventStream.close();
 
-    List<Event> events = subscriber.assertValueCount(2).getOnNextEvents();
+    List<Event> events = subscriber.assertValueCount(2).values();
     assertEquals(Topic.ChannelContextUnsubscribed, events.get(0).getTopic());
     assertEquals(Topic.ChannelContextUnsubscribed, events.get(1).getTopic());
   }
@@ -200,24 +200,24 @@ public class DefaultEventStreamTest {
   public void testChannelContextCloseEmitsChannelContextUnsubscribed() {
     eventStream.subscribe(ctx);
 
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listenChannelContextUnsubscribed().subscribe(subject);
     eventStream.listenChannelContextClosed().subscribe(subject);
-    AssertableSubscriber<Event> subscriber = subject.test();
+    TestSubscriber<Event> subscriber = subject.test();
 
     ctx.close();
 
-    List<Event> events = subscriber.assertValueCount(2).getOnNextEvents();
+    List<Event> events = subscriber.assertValueCount(2).values();
     assertEquals(Topic.ChannelContextUnsubscribed, events.get(0).getTopic());
     assertEquals(Topic.ChannelContextClosed, events.get(1).getTopic());
   }
 
   @Test
   public void testEventStreamSubscribeChannelContextSeveralTimes() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
     eventStream.listen().subscribe(subject);
 
-    AssertableSubscriber<Event> subscriber = subject.test();
+    TestSubscriber<Event> subscriber = subject.test();
 
     eventStream.subscribe(ctx);
     eventStream.subscribe(ctx);
@@ -228,7 +228,7 @@ public class DefaultEventStreamTest {
     ctx.postReadSuccess(messageOne);
     ctx.close();
 
-    List<Event> events = subscriber.assertValueCount(4).getOnNextEvents();
+    List<Event> events = subscriber.assertValueCount(4).values();
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
     assertEquals(Topic.ReadSuccess, events.get(1).getTopic());
     assertEquals(Topic.ChannelContextUnsubscribed, events.get(2).getTopic());
@@ -237,11 +237,11 @@ public class DefaultEventStreamTest {
 
   @Test
   public void testChannelContextSubscribesToSeveralEventStreams() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
-    BehaviorSubject<Event> anotherSubject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
+    BehaviorProcessor<Event> anotherSubject = BehaviorProcessor.create();
 
-    AssertableSubscriber<Event> subscriber = subject.test();
-    AssertableSubscriber<Event> anotherSubscriber = anotherSubject.test();
+    TestSubscriber<Event> subscriber = subject.test();
+    TestSubscriber<Event> anotherSubscriber = anotherSubject.test();
 
     eventStream.listen().subscribe(subject);
     anotherEventStream.listen().subscribe(anotherSubject);
@@ -249,41 +249,41 @@ public class DefaultEventStreamTest {
     eventStream.subscribe(ctx);
     anotherEventStream.subscribe(ctx);
 
-    List<Event> events = subscriber.assertValueCount(1).getOnNextEvents();
+    List<Event> events = subscriber.assertValueCount(1).values();
     assertEquals(Topic.ChannelContextSubscribed, events.get(0).getTopic());
 
-    List<Event> anotherEvents = anotherSubscriber.assertValueCount(1).getOnNextEvents();
+    List<Event> anotherEvents = anotherSubscriber.assertValueCount(1).values();
     assertEquals(Topic.ChannelContextSubscribed, anotherEvents.get(0).getTopic());
   }
 
   @Test
   public void testChannelContextUnsubscribesFromSeveralEventStreams() {
-    BehaviorSubject<Event> subject = BehaviorSubject.create();
-    BehaviorSubject<Event> anotherSubject = BehaviorSubject.create();
+    BehaviorProcessor<Event> subject = BehaviorProcessor.create();
+    BehaviorProcessor<Event> anotherSubject = BehaviorProcessor.create();
 
     eventStream.subscribe(ctx);
     anotherEventStream.subscribe(ctx);
 
-    AssertableSubscriber<Event> subscriber = subject.test();
-    AssertableSubscriber<Event> anotherSubscriber = anotherSubject.test();
+    TestSubscriber<Event> subscriber = subject.test();
+    TestSubscriber<Event> anotherSubscriber = anotherSubject.test();
 
     eventStream.listen().subscribe(subject);
     anotherEventStream.listen().subscribe(anotherSubject);
 
     ctx.close();
 
-    List<Event> events = subscriber.assertValueCount(2).getOnNextEvents();
+    List<Event> events = subscriber.assertValueCount(2).values();
     assertEquals(Topic.ChannelContextUnsubscribed, events.get(0).getTopic());
     assertEquals(Topic.ChannelContextClosed, events.get(1).getTopic());
 
-    List<Event> anotherEvents = anotherSubscriber.assertValueCount(2).getOnNextEvents();
+    List<Event> anotherEvents = anotherSubscriber.assertValueCount(2).values();
     assertEquals(Topic.ChannelContextUnsubscribed, anotherEvents.get(0).getTopic());
     assertEquals(Topic.ChannelContextClosed, anotherEvents.get(1).getTopic());
   }
 
   @Test
   public void testChannelContextClosedWithinEventStreamSubscribed() {
-    BehaviorSubject<Event> anotherSubject = BehaviorSubject.create();
+    BehaviorProcessor<Event> anotherSubject = BehaviorProcessor.create();
     anotherEventStream.listen().subscribe(event -> {
       String id = anotherCtx.getId();
       ChannelContext channelContext = ChannelContext.getIfExist(id);
@@ -292,11 +292,11 @@ public class DefaultEventStreamTest {
       }
     });
     anotherEventStream.listen().subscribe(anotherSubject);
-    AssertableSubscriber<Event> anotherSubscriber = anotherSubject.test();
+    TestSubscriber<Event> anotherSubscriber = anotherSubject.test();
 
     anotherEventStream.subscribe(anotherCtx);
 
-    List<Event> anotherEvents = anotherSubscriber.assertValueCount(3).getOnNextEvents();
+    List<Event> anotherEvents = anotherSubscriber.assertValueCount(3).values();
     assertEquals(Topic.ChannelContextSubscribed, anotherEvents.get(0).getTopic());
     assertEquals(Topic.ChannelContextUnsubscribed, anotherEvents.get(1).getTopic());
     assertEquals(Topic.ChannelContextClosed, anotherEvents.get(2).getTopic());

@@ -1,5 +1,7 @@
 package io.scalecube.streams;
 
+import io.reactivex.observers.BaseTestConsumer;
+import io.reactivex.subscribers.TestSubscriber;
 import io.scalecube.streams.codec.StreamMessageDataCodecImpl;
 import io.scalecube.streams.codec.StreamMessageDataCodec;
 import io.scalecube.transport.Address;
@@ -9,10 +11,12 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import rx.observers.AssertableSubscriber;
+import rx.observers.TestObserver;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+
+import static io.reactivex.observers.BaseTestConsumer.TestWaitStrategy.SLEEP_100MS;
 
 public class StreamDataCodecTest {
 
@@ -49,19 +53,13 @@ public class StreamDataCodecTest {
         StreamMessage toConsumer = codec.encodeData(StreamMessage.from(req).data(responsePayload).build());
         listeningServerStream.send(toConsumer);
       } catch (Throwable e) {
-        System.out.println("Err occurredЖ " + e.getMessage());
+        System.out.println("Err occurred " + e.getMessage());
         Assert.fail();
       }
     });
     Address address = listeningServerStream.bindAwait();
-    AssertableSubscriber<String> verify =
-        client.listenReadSuccess().map(e -> {
-          try {
-            return (String) codec.decodeData(e.getMessageOrThrow(), String.class).data();
-          } catch (IOException e1) {
-            throw new IllegalStateException(e1);
-          }
-        }).test();
+    TestSubscriber<String> test = client.listenReadSuccess()
+        .map(e -> (String) codec.decodeData(e.getMessageOrThrow(), String.class).data()).test();
 
 
     // When:
@@ -69,9 +67,9 @@ public class StreamDataCodecTest {
     client.send(address, req);
 
     // Then:
-    String response = verify.awaitValueCount(1, TIMEOUT, TimeUnit.SECONDS)
+    String response = test.awaitCount(1, SLEEP_100MS)
         .assertValueCount(1)
-        .getOnNextEvents().get(0);
+        .values().get(0);
     Assert.assertEquals(DOUBLE_PING, response);
   }
 }

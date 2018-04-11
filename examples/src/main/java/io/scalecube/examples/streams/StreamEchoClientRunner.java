@@ -27,7 +27,7 @@ public class StreamEchoClientRunner {
         () -> System.out.println("Done with client"));
 
     IntStream.rangeClosed(1, 5).forEach(i -> sp.onNext(StreamMessage.builder().qualifier("q/hello").build()));
-    sp.onCompleted();
+    sp.onComplete();
 
     Thread.currentThread().join();
   }

@@ -2,10 +2,9 @@ package io.scalecube.streams;
 
 import io.scalecube.transport.Address;
 
-import rx.Observable;
-import rx.Subscription;
-import rx.subjects.PublishSubject;
-import rx.subjects.Subject;
+import io.reactivex.Flowable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.processors.PublishProcessor;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -16,10 +15,10 @@ import java.util.stream.Stream;
 
 public class DefaultEventStream implements EventStream {
 
-  private final Subject<Event, Event> subject = PublishSubject.<Event>create().toSerialized();
-  private final Subject<Event, Event> closeSubject = PublishSubject.<Event>create().toSerialized();
+  private final PublishProcessor<Event> subject = PublishProcessor.create();
+  private final PublishProcessor<Event> closeSubject = PublishProcessor.create();
 
-  private final ConcurrentMap<ChannelContext, Subscription> subscriptions = new ConcurrentHashMap<>();
+  private final ConcurrentMap<ChannelContext, Disposable> subscriptions = new ConcurrentHashMap<>();
 
   private final Function<Event, Event> eventMapper;
 
@@ -35,7 +34,7 @@ public class DefaultEventStream implements EventStream {
   public final void subscribe(ChannelContext channelContext) {
     AtomicBoolean valueComputed = new AtomicBoolean();
     subscriptions.computeIfAbsent(channelContext, channelContext1 -> {
-      Subscription subscription = subscribe0(channelContext1);
+      Disposable subscription = subscribe0(channelContext1);
       valueComputed.set(true);
       return subscription;
     });
@@ -46,8 +45,8 @@ public class DefaultEventStream implements EventStream {
   }
 
   @Override
-  public final Observable<Event> listen() {
-    return subject.onBackpressureBuffer().asObservable().map(eventMapper::apply);
+  public final Flowable<Event> listen() {
+    return subject.map(eventMapper::apply);
   }
 
   @Override
@@ -65,15 +64,15 @@ public class DefaultEventStream implements EventStream {
   public final void close() {
     // cleanup subscriptions
     for (ChannelContext channelContext : subscriptions.keySet()) {
-      Subscription subscription = subscriptions.remove(channelContext);
+      Disposable subscription = subscriptions.remove(channelContext);
       if (subscription != null) {
-        subscription.unsubscribe();
+        subscription.dispose();
       }
     }
     subscriptions.clear();
     // complete subjects
-    subject.onCompleted();
-    closeSubject.onCompleted();
+    subject.onComplete();
+    closeSubject.onComplete();
   }
 
   @Override
@@ -82,9 +81,9 @@ public class DefaultEventStream implements EventStream {
     }, throwable -> onClose.accept(null), () -> onClose.accept(null));
   }
 
-  private Subscription subscribe0(ChannelContext channelContext) {
+  private Disposable subscribe0(ChannelContext channelContext) {
     return channelContext.listen()
-        .doOnUnsubscribe(() -> onChannelContextUnsubscribed(channelContext))
+        .doOnSubscribe(onSubscribe -> onChannelContextUnsubscribed(channelContext))
         .subscribe(subject::onNext);
   }
 

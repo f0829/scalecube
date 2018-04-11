@@ -26,7 +26,7 @@ public class StreamsEchoServerRunner {
               Throwable::printStackTrace,
               () -> {
                 System.out.println("Client is done, ok, finish with server .. good bye then");
-                sp.onCompleted();
+                sp.onComplete();
               }));
     });
 

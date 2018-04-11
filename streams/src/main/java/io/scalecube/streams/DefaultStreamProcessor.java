@@ -1,9 +1,10 @@
 package io.scalecube.streams;
 
-import rx.Emitter;
-import rx.Observable;
-import rx.Observer;
-import rx.subscriptions.CompositeSubscription;
+import io.reactivex.BackpressureStrategy;
+import io.reactivex.Flowable;
+import io.reactivex.FlowableEmitter;
+import io.reactivex.disposables.CompositeDisposable;
+import org.reactivestreams.Subscription;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,17 +34,22 @@ public final class DefaultStreamProcessor implements StreamProcessor {
   }
 
   @Override
-  public void onCompleted() {
+  public void onError(Throwable throwable) {
+    if (isTerminated.compareAndSet(false, true)) {
+      channelContext.postWrite(onErrorMessage);
+    }
+  }
+
+  @Override
+  public void onComplete() {
     if (isTerminated.compareAndSet(false, true)) {
       channelContext.postWrite(onCompletedMessage);
     }
   }
 
   @Override
-  public void onError(Throwable throwable) {
-    if (isTerminated.compareAndSet(false, true)) {
-      channelContext.postWrite(onErrorMessage);
-    }
+  public void onSubscribe(Subscription subscription) {
+    subscription.request(Long.MAX_VALUE);
   }
 
   @Override
@@ -54,11 +60,11 @@ public final class DefaultStreamProcessor implements StreamProcessor {
   }
 
   @Override
-  public Observable<StreamMessage> listen() {
-    return Observable.create(emitter -> {
+  public Flowable<StreamMessage> listen() {
+    return Flowable.create(emitter -> {
 
-      CompositeSubscription subscriptions = new CompositeSubscription();
-      emitter.setCancellation(subscriptions::clear);
+      CompositeDisposable subscriptions = new CompositeDisposable();
+      emitter.setCancellable(subscriptions::clear);
 
       // message logic: remote read => onMessage
       subscriptions.add(
@@ -79,7 +85,7 @@ public final class DefaultStreamProcessor implements StreamProcessor {
               .map(event -> new IOException("ChannelContext closed on address: " + event.getAddress()))
               .subscribe(emitter::onError));
 
-    }, Emitter.BackpressureMode.BUFFER);
+    }, BackpressureStrategy.BUFFER);
   }
 
   @Override
@@ -89,10 +95,10 @@ public final class DefaultStreamProcessor implements StreamProcessor {
     channelContext.close();
   }
 
-  private void onMessage(StreamMessage message, Observer<StreamMessage> emitter) {
+  private void onMessage(StreamMessage message, FlowableEmitter<StreamMessage> emitter) {
     String qualifier = message.qualifier();
     if (Qualifier.Q_ON_COMPLETED.asString().equalsIgnoreCase(qualifier)) { // remote => onCompleted
-      emitter.onCompleted();
+      emitter.onComplete();
       return;
     }
     String qualifierNamespace = Qualifier.getQualifierNamespace(qualifier);

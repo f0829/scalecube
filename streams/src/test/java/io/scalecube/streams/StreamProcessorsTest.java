@@ -2,6 +2,8 @@ package io.scalecube.streams;
 
 import static org.junit.Assert.assertNotSame;
 
+import io.reactivex.observers.TestObserver;
+import io.reactivex.subscribers.TestSubscriber;
 import io.scalecube.transport.Address;
 
 import io.netty.bootstrap.Bootstrap;
@@ -10,10 +12,9 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
-import rx.observers.AssertableSubscriber;
 
 import java.net.ConnectException;
 import java.time.Duration;
@@ -42,9 +43,9 @@ public class StreamProcessorsTest {
     bootstrap.group().shutdownGracefully();
   }
 
-  private AssertableSubscriber<StreamMessage> trySend(ClientStreamProcessors clientStreamProcessors) {
+  private TestSubscriber<StreamMessage> trySend(ClientStreamProcessors clientStreamProcessors) {
     StreamProcessor streamProcessor = clientStreamProcessors.create(Address.from("localhost:0"));
-    AssertableSubscriber<StreamMessage> subscriber = streamProcessor.listen().test();
+    TestSubscriber<StreamMessage> subscriber = streamProcessor.listen().test();
     streamProcessor.onNext(StreamMessage.builder().qualifier("q/test").build());
     return subscriber;
   }
@@ -69,9 +70,9 @@ public class StreamProcessorsTest {
     ClientStreamProcessors customOne = defaultOne.bootstrap(bootstrap);
 
     // connect and send msgs and fail withing 1 second (by default connect timout is much longer than 1 second)
-    trySend(customOne)
-        .awaitTerminalEvent(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        .assertNotCompleted()
+    TestSubscriber<StreamMessage> streamMessageTestSubscriber = trySend(customOne);
+    Assert.assertTrue(streamMessageTestSubscriber.awaitTerminalEvent(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+    streamMessageTestSubscriber.assertNotComplete()
         .assertNoValues()
         .assertError(ConnectException.class);
   }
