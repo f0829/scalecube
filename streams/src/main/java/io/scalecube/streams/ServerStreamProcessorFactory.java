@@ -56,8 +56,9 @@ public final class ServerStreamProcessorFactory {
         .map(message -> StreamMessage.from(message).subject(channelContext.getId()).build())
         .subscribe(remoteEventStream::send);
 
+    localEventStream.subscribe(channelContext);
     // emit stream processor arrived
-    streamProcessorSubject.onNext(new DefaultStreamProcessor(channelContext, localEventStream));
+    streamProcessorSubject.onNext(new DefaultStreamProcessor(channelContext));
   }
 
   /**

@@ -59,7 +59,9 @@ public final class ClientStreamProcessorFactory {
    * @return stream processor
    */
   public StreamProcessor newClientStreamProcessor(Address address) {
-    return new DefaultStreamProcessor(ChannelContext.create(address), localEventStream);
+    ChannelContext channelContext = ChannelContext.create(address);
+    localEventStream.subscribe(channelContext);
+    return new DefaultStreamProcessor(channelContext);
   }
 
   /**
