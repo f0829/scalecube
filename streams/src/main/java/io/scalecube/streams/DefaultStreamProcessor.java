@@ -16,42 +16,45 @@ public final class DefaultStreamProcessor implements StreamProcessor {
   public static final StreamMessage onCompletedMessage =
       StreamMessage.builder().qualifier(Qualifier.Q_ON_COMPLETED).build();
 
-  private final ChannelContext channelContext;
-  private final EventStream eventStream;
+  private final ChannelContext thisChannelContext;
+  private final EventStream otherEventStream;
+  private final EventStream thisEventStream;
 
   private final AtomicBoolean isTerminated = new AtomicBoolean(); // state
 
   /**
    * Constructor for this stream processor.
-   * 
+   *
    * @param channelContext channel context
-   * @param eventStream event stream
+   * @param otherEventStream provided event stream
    */
-  public DefaultStreamProcessor(ChannelContext channelContext, EventStream eventStream) {
-    this.channelContext = channelContext;
-    this.eventStream = eventStream;
+  public DefaultStreamProcessor(ChannelContext channelContext, EventStream otherEventStream) {
+    this.thisChannelContext = channelContext;
+    this.otherEventStream = otherEventStream;
+    this.thisEventStream = new DefaultEventStream();
     // bind channel context to event stream
-    this.eventStream.subscribe(this.channelContext);
+    this.otherEventStream.subscribe(thisChannelContext);
+    this.thisEventStream.subscribe(thisChannelContext);
   }
 
   @Override
   public void onCompleted() {
     if (isTerminated.compareAndSet(false, true)) {
-      channelContext.postWrite(onCompletedMessage);
+      thisChannelContext.postWrite(onCompletedMessage);
     }
   }
 
   @Override
   public void onError(Throwable throwable) {
     if (isTerminated.compareAndSet(false, true)) {
-      channelContext.postWrite(onErrorMessage);
+      thisChannelContext.postWrite(onErrorMessage);
     }
   }
 
   @Override
   public void onNext(StreamMessage message) {
     if (!isTerminated.get()) {
-      channelContext.postWrite(message);
+      thisChannelContext.postWrite(message);
     }
   }
 
@@ -64,20 +67,20 @@ public final class DefaultStreamProcessor implements StreamProcessor {
 
       // message logic: remote read => onMessage
       subscriptions.add(
-          channelContext.listenReadSuccess()
+          thisEventStream.listenReadSuccess()
               .map(Event::getMessageOrThrow)
               .subscribe(message -> onMessage(message, emitter)));
 
       // error logic: failed remote write => observer error
       subscriptions.add(
-          channelContext.listenWriteError()
+          thisEventStream.listenWriteError()
               .map(Event::getErrorOrThrow)
               .subscribe(emitter::onError));
 
       // connection logic: connection lost => observer error
       subscriptions.add(
-          eventStream.listenChannelContextClosed()
-              .filter(event -> event.getAddress().equals(channelContext.getAddress()))
+          otherEventStream.listenChannelContextClosed()
+              .filter(event -> event.getAddress().equals(thisChannelContext.getAddress()))
               .map(event -> new IOException("ChannelContext closed on address: " + event.getAddress()))
               .subscribe(emitter::onError));
 
@@ -88,7 +91,7 @@ public final class DefaultStreamProcessor implements StreamProcessor {
   public void close() {
     // this alone will unsubscribe this channel context
     // from local stream => no more requests, no more replies
-    channelContext.close();
+    thisChannelContext.close();
   }
 
   private void onMessage(StreamMessage message, Observer<StreamMessage> emitter) {

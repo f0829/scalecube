@@ -97,24 +97,8 @@ public final class ChannelContext {
     return subject.onBackpressureBuffer().asObservable();
   }
 
-  public Observable<Event> listenReadSuccess() {
-    return listen().filter(Event::isReadSuccess);
-  }
-
-  public Observable<Event> listenReadError() {
-    return listen().filter(Event::isReadError);
-  }
-
   public Observable<Event> listenWrite() {
     return listen().filter(Event::isWrite);
-  }
-
-  public Observable<Event> listenWriteSuccess() {
-    return listen().filter(Event::isWriteSuccess);
-  }
-
-  public Observable<Event> listenWriteError() {
-    return listen().filter(Event::isWriteError);
   }
 
   public void postReadSuccess(StreamMessage message) {
