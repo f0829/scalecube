@@ -83,7 +83,8 @@ public class DefaultEventStream implements EventStream {
 
   private Disposable subscribe0(ChannelContext channelContext) {
     return channelContext.listen()
-        .doOnSubscribe(onSubscribe -> onChannelContextUnsubscribed(channelContext))
+        .doOnTerminate(() -> onChannelContextUnsubscribed(channelContext))
+        .doOnCancel(() -> onChannelContextUnsubscribed(channelContext))
         .subscribe(subject::onNext);
   }
 

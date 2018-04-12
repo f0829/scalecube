@@ -283,7 +283,7 @@ public class DefaultEventStreamTest {
 
   @Test
   public void testChannelContextClosedWithinEventStreamSubscribed() {
-    BehaviorProcessor<Event> anotherSubject = BehaviorProcessor.create();
+    TestSubscriber<Event> anotherSubscriber = anotherEventStream.listen().test();
     anotherEventStream.listen().subscribe(event -> {
       String id = anotherCtx.getId();
       ChannelContext channelContext = ChannelContext.getIfExist(id);
@@ -291,8 +291,6 @@ public class DefaultEventStreamTest {
         channelContext.close();
       }
     });
-    anotherEventStream.listen().subscribe(anotherSubject);
-    TestSubscriber<Event> anotherSubscriber = anotherSubject.test();
 
     anotherEventStream.subscribe(anotherCtx);
 
